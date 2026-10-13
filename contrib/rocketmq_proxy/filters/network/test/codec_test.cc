@@ -17,6 +17,21 @@ class RocketmqCodecTest : public testing::Test {
 public:
   RocketmqCodecTest() = default;
   ~RocketmqCodecTest() override = default;
+
+protected:
+  // Decodes a frame that carries the given header JSON and an empty body.
+  static RemotingCommandPtr decodeHeaderOnlyFrame(const std::string& json, bool& has_error,
+                                                  int request_code = 0) {
+    Buffer::OwnedImpl buffer;
+    buffer.writeBEInt<int32_t>(4 + json.size());
+    buffer.writeBEInt<int32_t>(json.size());
+    buffer.add(json);
+
+    bool underflow = false;
+    RemotingCommandPtr cmd = Decoder::decode(buffer, underflow, has_error, request_code);
+    EXPECT_FALSE(underflow);
+    return cmd;
+  }
 };
 
 TEST_F(RocketmqCodecTest, DecodeWithMinFrameSize) {
@@ -263,6 +278,115 @@ TEST_F(RocketmqCodecTest, DecodeRequestSendMessageV1) {
   EXPECT_EQ(10, cmd->code());
   EXPECT_EQ(1, cmd->version());
   EXPECT_EQ(1, cmd->opaque());
+}
+
+TEST_F(RocketmqCodecTest, DecodeRequestSendMessageWithoutExtFields) {
+  std::string json = R"EOF(
+  {
+    "code": 10,
+    "version": 1,
+    "opaque": 1,
+    "flag": 0
+  }
+  )EOF";
+
+  bool has_error = false;
+  auto cmd = decodeHeaderOnlyFrame(json, has_error);
+
+  EXPECT_TRUE(has_error);
+  EXPECT_TRUE(nullptr == cmd);
+}
+
+TEST_F(RocketmqCodecTest, DecodeRequestSendMessageMissingRequiredField) {
+  // "queueId" is missing.
+  std::string json = R"EOF(
+  {
+    "code": 10,
+    "version": 1,
+    "opaque": 1,
+    "flag": 0,
+    "extFields": {
+      "bornTimestamp": 1575872212297,
+      "defaultTopic": "TBW102",
+      "defaultTopicQueueNums": 3,
+      "flag": 124,
+      "producerGroup": "FooBarGroup",
+      "sysFlag": 0,
+      "topic": "FooBar"
+    }
+  }
+  )EOF";
+
+  bool has_error = false;
+  auto cmd = decodeHeaderOnlyFrame(json, has_error);
+
+  EXPECT_TRUE(has_error);
+  EXPECT_TRUE(nullptr == cmd);
+}
+
+TEST_F(RocketmqCodecTest, DecodeRequestSendMessageNonNumericField) {
+  std::string json = R"EOF(
+  {
+    "code": 10,
+    "version": 1,
+    "opaque": 1,
+    "flag": 0,
+    "extFields": {
+      "bornTimestamp": 1575872212297,
+      "defaultTopic": "TBW102",
+      "defaultTopicQueueNums": 3,
+      "flag": 124,
+      "producerGroup": "FooBarGroup",
+      "queueId": "x",
+      "sysFlag": 0,
+      "topic": "FooBar"
+    }
+  }
+  )EOF";
+
+  bool has_error = false;
+  auto cmd = decodeHeaderOnlyFrame(json, has_error);
+
+  EXPECT_TRUE(has_error);
+  EXPECT_TRUE(nullptr == cmd);
+}
+
+TEST_F(RocketmqCodecTest, DecodePopMessageResponseWithInvalidExtFields) {
+  std::string missing_ext_fields = R"EOF(
+  {
+    "code": 0,
+    "version": 2,
+    "opaque": 1,
+    "flag": 1
+  }
+  )EOF";
+
+  bool has_error = false;
+  auto cmd = decodeHeaderOnlyFrame(missing_ext_fields, has_error,
+                                   static_cast<int>(RequestCode::PopMessage));
+  EXPECT_TRUE(has_error);
+  EXPECT_TRUE(nullptr == cmd);
+
+  std::string non_numeric_field = R"EOF(
+  {
+    "code": 0,
+    "version": 2,
+    "opaque": 1,
+    "flag": 1,
+    "extFields": {
+      "popTime": "1234",
+      "invisibleTime": "10",
+      "reviveQid": "2",
+      "restNum": "ten"
+    }
+  }
+  )EOF";
+
+  has_error = false;
+  cmd = decodeHeaderOnlyFrame(non_numeric_field, has_error,
+                              static_cast<int>(RequestCode::PopMessage));
+  EXPECT_TRUE(has_error);
+  EXPECT_TRUE(nullptr == cmd);
 }
 
 TEST_F(RocketmqCodecTest, DecodeSendMessageResponseWithSystemError) {

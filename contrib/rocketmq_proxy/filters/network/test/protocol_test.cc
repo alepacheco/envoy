@@ -43,7 +43,7 @@ TEST_F(UnregisterClientRequestHeaderTest, Decode) {
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
   UnregisterClientRequestHeader unregister_client_request_header;
-  unregister_client_request_header.decode(doc);
+  EXPECT_TRUE(unregister_client_request_header.decode(doc));
   EXPECT_STREQ(client_id_.c_str(), unregister_client_request_header.clientId().c_str());
   EXPECT_STREQ(producer_group_.c_str(), unregister_client_request_header.producerGroup().c_str());
   EXPECT_STREQ(consumer_group_.c_str(), unregister_client_request_header.consumerGroup().c_str());
@@ -115,7 +115,7 @@ TEST_F(AckMessageRequestHeaderTest, Decode) {
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
 
   AckMessageRequestHeader ack_header;
-  ack_header.decode(doc);
+  EXPECT_TRUE(ack_header.decode(doc));
   ASSERT_STREQ(consumer_group.c_str(), ack_header.consumerGroup().data());
   ASSERT_STREQ(topic.c_str(), ack_header.topic().c_str());
   ASSERT_EQ(queue_id, ack_header.queueId());
@@ -138,7 +138,7 @@ TEST_F(AckMessageRequestHeaderTest, DecodeNumSerializedAsString) {
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
 
   AckMessageRequestHeader ack_header;
-  ack_header.decode(doc);
+  EXPECT_TRUE(ack_header.decode(doc));
   ASSERT_STREQ(consumer_group.c_str(), ack_header.consumerGroup().data());
   ASSERT_STREQ(topic.c_str(), ack_header.topic().c_str());
   ASSERT_EQ(queue_id, ack_header.queueId());
@@ -229,7 +229,7 @@ TEST_F(PopMessageRequestHeaderTest, Decode) {
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
   PopMessageRequestHeader pop_request_header;
-  pop_request_header.decode(doc);
+  EXPECT_TRUE(pop_request_header.decode(doc));
 
   ASSERT_STREQ(consumer_group.c_str(), pop_request_header.consumerGroup().data());
   ASSERT_STREQ(topic.c_str(), pop_request_header.topic().c_str());
@@ -262,7 +262,7 @@ TEST_F(PopMessageRequestHeaderTest, DecodeNumSerializedAsString) {
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
   PopMessageRequestHeader pop_request_header;
-  pop_request_header.decode(doc);
+  EXPECT_TRUE(pop_request_header.decode(doc));
 
   ASSERT_STREQ(consumer_group.c_str(), pop_request_header.consumerGroup().data());
   ASSERT_STREQ(topic.c_str(), pop_request_header.topic().c_str());
@@ -337,7 +337,7 @@ TEST_F(PopMessageResponseHeaderTest, Decode) {
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
 
   PopMessageResponseHeader header;
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
 
   EXPECT_EQ(pop_time, header.popTimeForTest());
   EXPECT_EQ(invisible_time, header.invisibleTime());
@@ -366,7 +366,7 @@ TEST_F(PopMessageResponseHeaderTest, DecodeNumSerializedAsString) {
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
 
   PopMessageResponseHeader header;
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
 
   EXPECT_EQ(pop_time, header.popTimeForTest());
   EXPECT_EQ(invisible_time, header.invisibleTime());
@@ -414,7 +414,7 @@ TEST_F(SendMessageResponseHeaderTest, Decode) {
   )EOF";
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  response_header_.decode(doc);
+  EXPECT_TRUE(response_header_.decode(doc));
   EXPECT_STREQ("abc", response_header_.msgId().c_str());
   EXPECT_EQ(1, response_header_.queueId());
   EXPECT_EQ(10, response_header_.queueOffset());
@@ -432,7 +432,7 @@ TEST_F(SendMessageResponseHeaderTest, DecodeNumSerializedAsString) {
   )EOF";
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  response_header_.decode(doc);
+  EXPECT_TRUE(response_header_.decode(doc));
   EXPECT_STREQ("abc", response_header_.msgId().c_str());
   EXPECT_EQ(1, response_header_.queueId());
   EXPECT_EQ(10, response_header_.queueOffset());
@@ -573,7 +573,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV1) {
   SendMessageRequestHeader header;
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -611,7 +611,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV1Optional) {
   SendMessageRequestHeader header;
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -649,7 +649,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV1OptionalNumSerializedAsString) {
   SendMessageRequestHeader header;
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -686,7 +686,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV2) {
   header.version(SendMessageRequestVersion::V2);
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -725,7 +725,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV2Optional) {
   header.version(SendMessageRequestVersion::V2);
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -764,7 +764,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV2OptionalNumSerializedAsString) {
   header.version(SendMessageRequestVersion::V2);
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
-  header.decode(doc);
+  EXPECT_TRUE(header.decode(doc));
   EXPECT_STREQ("FooBar", header.topic().c_str());
   EXPECT_EQ(1, header.queueId());
   EXPECT_STREQ("FooBarGroup", header.producerGroup().c_str());
@@ -801,7 +801,7 @@ TEST_F(SendMessageRequestHeaderTest, DecodeV3) {
   Protobuf::Value doc;
   MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
   header.version(SendMessageRequestVersion::V3);
-  header.decode(doc);
+  EXPECT_FALSE(header.decode(doc));
 }
 
 class HeartbeatDataTest : public testing::Test {
@@ -918,6 +918,128 @@ TEST_F(RemotingCommandTest, Remark) {
   const char* remark = "OK";
   cmd_.remark(remark);
   EXPECT_STREQ(remark, cmd_.remark().c_str());
+}
+
+// Parses the given JSON into the extended fields of a header.
+Protobuf::Value parseExtFields(const std::string& json) {
+  Protobuf::Value doc;
+  MessageUtil::loadFromJson(json, *(doc.mutable_struct_value()));
+  return doc;
+}
+
+TEST_F(SendMessageRequestHeaderTest, DecodeV1Invalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "queueId".
+      R"EOF({"producerGroup": "PG", "topic": "T", "defaultTopic": "TBW102",
+             "defaultTopicQueueNums": 3, "sysFlag": 0, "bornTimestamp": 1, "flag": 0})EOF",
+      // "queueId" is not a number.
+      R"EOF({"producerGroup": "PG", "topic": "T", "defaultTopic": "TBW102",
+             "defaultTopicQueueNums": 3, "queueId": "x", "sysFlag": 0, "bornTimestamp": 1,
+             "flag": 0})EOF",
+      // "reconsumeTimes" is not a number.
+      R"EOF({"producerGroup": "PG", "topic": "T", "defaultTopic": "TBW102",
+             "defaultTopicQueueNums": 3, "queueId": 1, "sysFlag": 0, "bornTimestamp": 1,
+             "flag": 0, "reconsumeTimes": "x"})EOF",
+      // "maxReconsumeTimes" is not a number.
+      R"EOF({"producerGroup": "PG", "topic": "T", "defaultTopic": "TBW102",
+             "defaultTopicQueueNums": 3, "queueId": 1, "sysFlag": 0, "bornTimestamp": 1,
+             "flag": 0, "maxReconsumeTimes": "x"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    SendMessageRequestHeader header;
+    header.version(SendMessageRequestVersion::V1);
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(SendMessageRequestHeaderTest, DecodeV2Invalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "e" (queue ID).
+      R"EOF({"a": "PG", "b": "T", "c": "TBW102", "d": 3, "f": 0, "g": 1, "h": 0})EOF",
+      // "e" is not a number.
+      R"EOF({"a": "PG", "b": "T", "c": "TBW102", "d": 3, "e": "x", "f": 0, "g": 1,
+             "h": 0})EOF",
+      // "j" (reconsume times) is not a number.
+      R"EOF({"a": "PG", "b": "T", "c": "TBW102", "d": 3, "e": 1, "f": 0, "g": 1, "h": 0,
+             "j": "x"})EOF",
+      // "l" (max reconsume times) is not a number.
+      R"EOF({"a": "PG", "b": "T", "c": "TBW102", "d": 3, "e": 1, "f": 0, "g": 1, "h": 0,
+             "l": "x"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    SendMessageRequestHeader header;
+    header.version(SendMessageRequestVersion::V2);
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(SendMessageResponseHeaderTest, DecodeInvalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "msgId".
+      R"EOF({"queueId": 1, "queueOffset": 100})EOF",
+      // "queueOffset" is not a number.
+      R"EOF({"msgId": "MSG_ID_01", "queueId": 1, "queueOffset": "x"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    SendMessageResponseHeader header;
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(PopMessageRequestHeaderTest, DecodeInvalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "topic".
+      R"EOF({"consumerGroup": "CG", "queueId": 1, "maxMsgNums": 2, "invisibleTime": 3,
+             "pollTime": 4, "bornTime": 5, "initMode": 6})EOF",
+      // "initMode" is not a number.
+      R"EOF({"consumerGroup": "CG", "topic": "T", "queueId": 1, "maxMsgNums": 2,
+             "invisibleTime": 3, "pollTime": 4, "bornTime": 5, "initMode": "x"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    PopMessageRequestHeader header;
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(PopMessageResponseHeaderTest, DecodeInvalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "reviveQid".
+      R"EOF({"popTime": 1, "invisibleTime": 2, "restNum": 3})EOF",
+      // "popTime" is out of range.
+      R"EOF({"popTime": "99999999999999999999", "invisibleTime": 2, "reviveQid": 1,
+             "restNum": 3})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    PopMessageResponseHeader header;
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(AckMessageRequestHeaderTest, DecodeInvalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "extraInfo".
+      R"EOF({"consumerGroup": "CG", "topic": "T", "queueId": 1, "offset": 100})EOF",
+      // "offset" is not a number.
+      R"EOF({"consumerGroup": "CG", "topic": "T", "queueId": 1, "extraInfo": "E",
+             "offset": "x"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    AckMessageRequestHeader header;
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
+}
+
+TEST_F(UnregisterClientRequestHeaderTest, DecodeInvalid) {
+  const std::vector<std::string> invalid_ext_fields = {
+      // Missing the required "clientID".
+      R"EOF({"producerGroup": "PG"})EOF",
+      // Neither "producerGroup" nor "consumerGroup" is present.
+      R"EOF({"clientID": "SampleClient_01"})EOF",
+  };
+  for (const auto& json : invalid_ext_fields) {
+    UnregisterClientRequestHeader header;
+    EXPECT_FALSE(header.decode(parseExtFields(json))) << json;
+  }
 }
 
 } // namespace RocketmqProxy

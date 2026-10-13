@@ -60,11 +60,26 @@ private:
 
   static bool isJsonHeader(uint32_t len) { return (len >> 24u) == 0; }
 
-  static CommandCustomHeaderPtr decodeExtHeader(RequestCode code, Protobuf::Struct& header_struct);
+  /**
+   * Decode the extended header of a request, if the request code defines one.
+   * @param custom_header Set to the decoded header, or nullptr if there is none to decode.
+   * @return false if the extended header is missing or malformed.
+   */
+  static bool decodeExtHeader(RequestCode code, Protobuf::Struct& header_struct,
+                              CommandCustomHeaderPtr& custom_header);
 
-  static CommandCustomHeaderPtr decodeResponseExtHeader(ResponseCode response_code,
-                                                        Protobuf::Struct& header_struct,
-                                                        RequestCode request_code);
+  /**
+   * Decode the extended header of a response, if the response to the request code defines one.
+   * @param custom_header Set to the decoded header, or nullptr if there is none to decode.
+   * @return false if the extended header is missing or malformed.
+   */
+  static bool decodeResponseExtHeader(ResponseCode response_code, Protobuf::Struct& header_struct,
+                                      RequestCode request_code,
+                                      CommandCustomHeaderPtr& custom_header);
+
+  static bool decodeCustomHeader(std::unique_ptr<CommandCustomHeader> header,
+                                 Protobuf::Struct& header_struct,
+                                 CommandCustomHeaderPtr& custom_header);
 
   static bool isComplete(Buffer::Instance& buffer, int32_t cursor);
 };

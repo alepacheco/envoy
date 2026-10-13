@@ -51,7 +51,11 @@ public:
 
   virtual void encode(Protobuf::Value& root) PURE;
 
-  virtual void decode(const Protobuf::Value& ext_fields) PURE;
+  /**
+   * Decodes the extended fields of a header received from the network.
+   * @return false if a required field is missing or malformed.
+   */
+  virtual bool decode(const Protobuf::Value& ext_fields) PURE;
 
   const std::string& targetBrokerName() const { return target_broker_name_; }
 
@@ -267,7 +271,7 @@ public:
 
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   const std::string& producerGroup() const { return producer_group_; }
 
@@ -339,7 +343,7 @@ public:
 
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   const std::string& msgId() const { return msg_id_; }
 
@@ -379,7 +383,7 @@ class GetRouteInfoRequestHeader : public RoutingCommandCustomHeader {
 public:
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 };
 
 /**
@@ -401,7 +405,7 @@ public:
 
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   const std::string& consumerGroup() const { return consumer_group_; }
 
@@ -461,7 +465,7 @@ private:
  */
 class PopMessageResponseHeader : public CommandCustomHeader {
 public:
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   void encode(Protobuf::Value& root) override;
 
@@ -518,7 +522,7 @@ private:
  */
 class AckMessageRequestHeader : public RoutingCommandCustomHeader {
 public:
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   void encode(Protobuf::Value& root) override;
 
@@ -562,7 +566,7 @@ class UnregisterClientRequestHeader : public CommandCustomHeader {
 public:
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   void clientId(absl::string_view client_id) {
     client_id_ = std::string(client_id.data(), client_id.length());
@@ -595,7 +599,7 @@ class GetConsumerListByGroupRequestHeader : public CommandCustomHeader {
 public:
   void encode(Protobuf::Value& root) override;
 
-  void decode(const Protobuf::Value& ext_fields) override;
+  bool decode(const Protobuf::Value& ext_fields) override;
 
   void consumerGroup(absl::string_view consumer_group) {
     consumer_group_ = std::string(consumer_group.data(), consumer_group.length());

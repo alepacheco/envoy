@@ -648,6 +648,29 @@ route_config:
   buffer_.drain(buffer_.length());
 }
 
+TEST_F(RocketmqConnectionManagerTest, OnDataSendMessageWithoutExtFields) {
+  initializeFilter();
+
+  std::string json = R"EOF(
+  {
+    "code": 10,
+    "version": 1,
+    "opaque": 1,
+    "flag": 0
+  }
+  )EOF";
+
+  buffer_.writeBEInt<int32_t>(4 + json.size());
+  buffer_.writeBEInt<int32_t>(json.size());
+  buffer_.add(json);
+  EXPECT_EQ(conn_manager_->onData(buffer_, false), Network::FilterStatus::StopIteration);
+  EXPECT_EQ(1U, store_.counter("test.request").value());
+  EXPECT_EQ(1U, store_.counter("test.request_decoding_error").value());
+  EXPECT_EQ(0U, store_.counter("test.send_message_v1").value());
+
+  buffer_.drain(buffer_.length());
+}
+
 TEST_F(RocketmqConnectionManagerTest, OnDataWithUnsupportedCode) {
   initializeFilter();
 

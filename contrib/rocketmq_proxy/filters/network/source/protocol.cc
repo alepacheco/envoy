@@ -3,12 +3,43 @@
 #include "source/common/common/assert.h"
 #include "source/common/common/enum_to_int.h"
 
+#include "absl/strings/numbers.h"
 #include "contrib/rocketmq_proxy/filters/network/source/constant.h"
 
 namespace Envoy {
 namespace Extensions {
 namespace NetworkFilters {
 namespace RocketmqProxy {
+
+namespace {
+
+using FieldMap = Protobuf::Map<std::string, Protobuf::Value>;
+
+// Reads a required string field. Returns false if the field is missing.
+bool readString(const FieldMap& members, const std::string& key, std::string& value) {
+  const auto it = members.find(key);
+  if (it == members.end()) {
+    return false;
+  }
+  value = it->second.string_value();
+  return true;
+}
+
+// Reads a required integer field, which may be serialized either as a JSON number or as a string.
+// Returns false if the field is missing or is a string that is not a valid integer of type T.
+template <typename T> bool readInt(const FieldMap& members, const std::string& key, T& value) {
+  const auto it = members.find(key);
+  if (it == members.end()) {
+    return false;
+  }
+  if (it->second.kind_case() == Protobuf::Value::kNumberValue) {
+    value = static_cast<T>(it->second.number_value());
+    return true;
+  }
+  return absl::SimpleAtoi(it->second.string_value(), &value);
+}
+
+} // namespace
 
 void SendMessageRequestHeader::encode(Protobuf::Value& root) {
   auto& members = *(root.mutable_struct_value()->mutable_fields());
@@ -147,63 +178,26 @@ void SendMessageRequestHeader::encode(Protobuf::Value& root) {
   }
 }
 
-void SendMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
+bool SendMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
   switch (version_) {
   case SendMessageRequestVersion::V1: {
-    ASSERT(members.contains("producerGroup"));
-    ASSERT(members.contains("topic"));
-    ASSERT(members.contains("defaultTopic"));
-    ASSERT(members.contains("defaultTopicQueueNums"));
-    ASSERT(members.contains("queueId"));
-    ASSERT(members.contains("sysFlag"));
-    ASSERT(members.contains("bornTimestamp"));
-    ASSERT(members.contains("flag"));
-
-    producer_group_ = members.at("producerGroup").string_value();
-    topic_ = members.at("topic").string_value();
-    default_topic_ = members.at("defaultTopic").string_value();
-
-    if (members.at("defaultTopicQueueNums").kind_case() == Protobuf::Value::kNumberValue) {
-      default_topic_queue_number_ = members.at("defaultTopicQueueNums").number_value();
-    } else {
-      default_topic_queue_number_ = std::stoi(members.at("defaultTopicQueueNums").string_value());
-    }
-
-    if (members.at("queueId").kind_case() == Protobuf::Value::kNumberValue) {
-      queue_id_ = members.at("queueId").number_value();
-    } else {
-      queue_id_ = std::stoi(members.at("queueId").string_value());
-    }
-
-    if (members.at("sysFlag").kind_case() == Protobuf::Value::kNumberValue) {
-      sys_flag_ = static_cast<int32_t>(members.at("sysFlag").number_value());
-    } else {
-      sys_flag_ = std::stoi(members.at("sysFlag").string_value());
-    }
-
-    if (members.at("bornTimestamp").kind_case() == Protobuf::Value::kNumberValue) {
-      born_timestamp_ = static_cast<int64_t>(members.at("bornTimestamp").number_value());
-    } else {
-      born_timestamp_ = std::stoll(members.at("bornTimestamp").string_value());
-    }
-
-    if (members.at("flag").kind_case() == Protobuf::Value::kNumberValue) {
-      flag_ = static_cast<int32_t>(members.at("flag").number_value());
-    } else {
-      flag_ = std::stoi(members.at("flag").string_value());
+    if (!readString(members, "producerGroup", producer_group_) ||
+        !readString(members, "topic", topic_) ||
+        !readString(members, "defaultTopic", default_topic_) ||
+        !readInt(members, "defaultTopicQueueNums", default_topic_queue_number_) ||
+        !readInt(members, "queueId", queue_id_) || !readInt(members, "sysFlag", sys_flag_) ||
+        !readInt(members, "bornTimestamp", born_timestamp_) || !readInt(members, "flag", flag_)) {
+      return false;
     }
 
     if (members.contains("properties")) {
       properties_ = members.at("properties").string_value();
     }
 
-    if (members.contains("reconsumeTimes")) {
-      if (members.at("reconsumeTimes").kind_case() == Protobuf::Value::kNumberValue) {
-        reconsume_time_ = members.at("reconsumeTimes").number_value();
-      } else {
-        reconsume_time_ = std::stoi(members.at("reconsumeTimes").string_value());
-      }
+    if (members.contains("reconsumeTimes") &&
+        !readInt(members, "reconsumeTimes", reconsume_time_)) {
+      return false;
     }
 
     if (members.contains("unitMode")) {
@@ -222,70 +216,28 @@ void SendMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
       }
     }
 
-    if (members.contains("maxReconsumeTimes")) {
-      if (members.at("maxReconsumeTimes").kind_case() == Protobuf::Value::kNumberValue) {
-        max_reconsume_time_ = static_cast<int32_t>(members.at("maxReconsumeTimes").number_value());
-      } else {
-        max_reconsume_time_ = std::stoi(members.at("maxReconsumeTimes").string_value());
-      }
+    if (members.contains("maxReconsumeTimes") &&
+        !readInt(members, "maxReconsumeTimes", max_reconsume_time_)) {
+      return false;
     }
     break;
   }
 
   case SendMessageRequestVersion::V2: {
-    ASSERT(members.contains("a"));
-    ASSERT(members.contains("b"));
-    ASSERT(members.contains("c"));
-    ASSERT(members.contains("d"));
-    ASSERT(members.contains("e"));
-    ASSERT(members.contains("f"));
-    ASSERT(members.contains("g"));
-    ASSERT(members.contains("h"));
-
-    producer_group_ = members.at("a").string_value();
-    topic_ = members.at("b").string_value();
-    default_topic_ = members.at("c").string_value();
-
-    if (members.at("d").kind_case() == Protobuf::Value::kNumberValue) {
-      default_topic_queue_number_ = members.at("d").number_value();
-    } else {
-      default_topic_queue_number_ = std::stoi(members.at("d").string_value());
-    }
-
-    if (members.at("e").kind_case() == Protobuf::Value::kNumberValue) {
-      queue_id_ = members.at("e").number_value();
-    } else {
-      queue_id_ = std::stoi(members.at("e").string_value());
-    }
-
-    if (members.at("f").kind_case() == Protobuf::Value::kNumberValue) {
-      sys_flag_ = static_cast<int32_t>(members.at("f").number_value());
-    } else {
-      sys_flag_ = std::stoi(members.at("f").string_value());
-    }
-
-    if (members.at("g").kind_case() == Protobuf::Value::kNumberValue) {
-      born_timestamp_ = static_cast<int64_t>(members.at("g").number_value());
-    } else {
-      born_timestamp_ = std::stoll(members.at("g").string_value());
-    }
-
-    if (members.at("h").kind_case() == Protobuf::Value::kNumberValue) {
-      flag_ = static_cast<int32_t>(members.at("h").number_value());
-    } else {
-      flag_ = std::stoi(members.at("h").string_value());
+    if (!readString(members, "a", producer_group_) || !readString(members, "b", topic_) ||
+        !readString(members, "c", default_topic_) ||
+        !readInt(members, "d", default_topic_queue_number_) || !readInt(members, "e", queue_id_) ||
+        !readInt(members, "f", sys_flag_) || !readInt(members, "g", born_timestamp_) ||
+        !readInt(members, "h", flag_)) {
+      return false;
     }
 
     if (members.contains("i")) {
       properties_ = members.at("i").string_value();
     }
 
-    if (members.contains("j")) {
-      if (members.at("j").kind_case() == Protobuf::Value::kNumberValue) {
-        reconsume_time_ = members.at("j").number_value();
-      } else {
-        reconsume_time_ = std::stoi(members.at("j").string_value());
-      }
+    if (members.contains("j") && !readInt(members, "j", reconsume_time_)) {
+      return false;
     }
 
     if (members.contains("k")) {
@@ -304,19 +256,16 @@ void SendMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
       }
     }
 
-    if (members.contains("l")) {
-      if (members.at("l").kind_case() == Protobuf::Value::kNumberValue) {
-        max_reconsume_time_ = members.at("l").number_value();
-      } else {
-        max_reconsume_time_ = std::stoi(members.at("l").string_value());
-      }
+    if (members.contains("l") && !readInt(members, "l", max_reconsume_time_)) {
+      return false;
     }
     break;
   }
   default:
     ENVOY_LOG(error, "Unknown SendMessageRequestVersion: {}", static_cast<int>(version_));
-    break;
+    return false;
   }
+  return true;
 }
 
 void SendMessageResponseHeader::encode(Protobuf::Value& root) {
@@ -344,29 +293,17 @@ void SendMessageResponseHeader::encode(Protobuf::Value& root) {
   }
 }
 
-void SendMessageResponseHeader::decode(const Protobuf::Value& ext_fields) {
+bool SendMessageResponseHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("msgId"));
-  ASSERT(members.contains("queueId"));
-  ASSERT(members.contains("queueOffset"));
-
-  msg_id_ = members.at("msgId").string_value();
-
-  if (members.at("queueId").kind_case() == Protobuf::Value::kNumberValue) {
-    queue_id_ = members.at("queueId").number_value();
-  } else {
-    queue_id_ = std::stoi(members.at("queueId").string_value());
-  }
-
-  if (members.at("queueOffset").kind_case() == Protobuf::Value::kNumberValue) {
-    queue_offset_ = members.at("queueOffset").number_value();
-  } else {
-    queue_offset_ = std::stoll(members.at("queueOffset").string_value());
+  if (!readString(members, "msgId", msg_id_) || !readInt(members, "queueId", queue_id_) ||
+      !readInt(members, "queueOffset", queue_offset_)) {
+    return false;
   }
 
   if (members.contains("transactionId")) {
     transaction_id_ = members.at("transactionId").string_value();
   }
+  return true;
 }
 
 void GetRouteInfoRequestHeader::encode(Protobuf::Value& root) {
@@ -377,10 +314,8 @@ void GetRouteInfoRequestHeader::encode(Protobuf::Value& root) {
   members["topic"] = topic_v;
 }
 
-void GetRouteInfoRequestHeader::decode(const Protobuf::Value& ext_fields) {
-  const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("topic"));
-  topic_ = members.at("topic").string_value();
+bool GetRouteInfoRequestHeader::decode(const Protobuf::Value& ext_fields) {
+  return readString(ext_fields.struct_value().fields(), "topic", topic_);
 }
 
 void PopMessageRequestHeader::encode(Protobuf::Value& root) {
@@ -433,54 +368,15 @@ void PopMessageRequestHeader::encode(Protobuf::Value& root) {
   }
 }
 
-void PopMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
+bool PopMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("consumerGroup"));
-  ASSERT(members.contains("topic"));
-  ASSERT(members.contains("queueId"));
-  ASSERT(members.contains("maxMsgNums"));
-  ASSERT(members.contains("invisibleTime"));
-  ASSERT(members.contains("pollTime"));
-  ASSERT(members.contains("bornTime"));
-  ASSERT(members.contains("initMode"));
-
-  consumer_group_ = members.at("consumerGroup").string_value();
-  topic_ = members.at("topic").string_value();
-
-  if (members.at("queueId").kind_case() == Protobuf::Value::kNumberValue) {
-    queue_id_ = members.at("queueId").number_value();
-  } else {
-    queue_id_ = std::stoi(members.at("queueId").string_value());
-  }
-
-  if (members.at("maxMsgNums").kind_case() == Protobuf::Value::kNumberValue) {
-    max_msg_nums_ = members.at("maxMsgNums").number_value();
-  } else {
-    max_msg_nums_ = std::stoi(members.at("maxMsgNums").string_value());
-  }
-
-  if (members.at("invisibleTime").kind_case() == Protobuf::Value::kNumberValue) {
-    invisible_time_ = members.at("invisibleTime").number_value();
-  } else {
-    invisible_time_ = std::stoll(members.at("invisibleTime").string_value());
-  }
-
-  if (members.at("pollTime").kind_case() == Protobuf::Value::kNumberValue) {
-    poll_time_ = members.at("pollTime").number_value();
-  } else {
-    poll_time_ = std::stoll(members.at("pollTime").string_value());
-  }
-
-  if (members.at("bornTime").kind_case() == Protobuf::Value::kNumberValue) {
-    born_time_ = members.at("bornTime").number_value();
-  } else {
-    born_time_ = std::stoll(members.at("bornTime").string_value());
-  }
-
-  if (members.at("initMode").kind_case() == Protobuf::Value::kNumberValue) {
-    init_mode_ = members.at("initMode").number_value();
-  } else {
-    init_mode_ = std::stol(members.at("initMode").string_value());
+  if (!readString(members, "consumerGroup", consumer_group_) ||
+      !readString(members, "topic", topic_) || !readInt(members, "queueId", queue_id_) ||
+      !readInt(members, "maxMsgNums", max_msg_nums_) ||
+      !readInt(members, "invisibleTime", invisible_time_) ||
+      !readInt(members, "pollTime", poll_time_) || !readInt(members, "bornTime", born_time_) ||
+      !readInt(members, "initMode", init_mode_)) {
+    return false;
   }
 
   if (members.contains("expType")) {
@@ -490,6 +386,7 @@ void PopMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
   if (members.contains("exp")) {
     exp_ = members.at("exp").string_value();
   }
+  return true;
 }
 
 void PopMessageResponseHeader::encode(Protobuf::Value& root) {
@@ -530,35 +427,12 @@ void PopMessageResponseHeader::encode(Protobuf::Value& root) {
   }
 }
 
-void PopMessageResponseHeader::decode(const Protobuf::Value& ext_fields) {
+bool PopMessageResponseHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("popTime"));
-  ASSERT(members.contains("invisibleTime"));
-  ASSERT(members.contains("reviveQid"));
-  ASSERT(members.contains("restNum"));
-
-  if (members.at("popTime").kind_case() == Protobuf::Value::kNumberValue) {
-    pop_time_ = members.at("popTime").number_value();
-  } else {
-    pop_time_ = std::stoull(members.at("popTime").string_value());
-  }
-
-  if (members.at("invisibleTime").kind_case() == Protobuf::Value::kNumberValue) {
-    invisible_time_ = members.at("invisibleTime").number_value();
-  } else {
-    invisible_time_ = std::stoull(members.at("invisibleTime").string_value());
-  }
-
-  if (members.at("reviveQid").kind_case() == Protobuf::Value::kNumberValue) {
-    revive_qid_ = members.at("reviveQid").number_value();
-  } else {
-    revive_qid_ = std::stoul(members.at("reviveQid").string_value());
-  }
-
-  if (members.at("restNum").kind_case() == Protobuf::Value::kNumberValue) {
-    rest_num_ = members.at("restNum").number_value();
-  } else {
-    rest_num_ = std::stoull(members.at("restNum").string_value());
+  if (!readInt(members, "popTime", pop_time_) ||
+      !readInt(members, "invisibleTime", invisible_time_) ||
+      !readInt(members, "reviveQid", revive_qid_) || !readInt(members, "restNum", rest_num_)) {
+    return false;
   }
 
   if (members.contains("startOffsetInfo")) {
@@ -572,6 +446,7 @@ void PopMessageResponseHeader::decode(const Protobuf::Value& ext_fields) {
   if (members.contains("orderCountInfo")) {
     order_count_info_ = members.at("orderCountInfo").string_value();
   }
+  return true;
 }
 
 void AckMessageRequestHeader::encode(Protobuf::Value& root) {
@@ -603,31 +478,11 @@ void AckMessageRequestHeader::encode(Protobuf::Value& root) {
   members["offset"] = offset_v;
 }
 
-void AckMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
+bool AckMessageRequestHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("consumerGroup"));
-  ASSERT(members.contains("topic"));
-  ASSERT(members.contains("queueId"));
-  ASSERT(members.contains("extraInfo"));
-  ASSERT(members.contains("offset"));
-
-  consumer_group_ = members.at("consumerGroup").string_value();
-
-  topic_ = members.at("topic").string_value();
-
-  if (members.at("queueId").kind_case() == Protobuf::Value::kNumberValue) {
-    queue_id_ = members.at("queueId").number_value();
-  } else {
-    queue_id_ = std::stoi(members.at("queueId").string_value());
-  }
-
-  extra_info_ = members.at("extraInfo").string_value();
-
-  if (members.at("offset").kind_case() == Protobuf::Value::kNumberValue) {
-    offset_ = members.at("offset").number_value();
-  } else {
-    offset_ = std::stoll(members.at("offset").string_value());
-  }
+  return readString(members, "consumerGroup", consumer_group_) &&
+         readString(members, "topic", topic_) && readInt(members, "queueId", queue_id_) &&
+         readString(members, "extraInfo", extra_info_) && readInt(members, "offset", offset_);
 }
 
 void UnregisterClientRequestHeader::encode(Protobuf::Value& root) {
@@ -652,12 +507,12 @@ void UnregisterClientRequestHeader::encode(Protobuf::Value& root) {
   }
 }
 
-void UnregisterClientRequestHeader::decode(const Protobuf::Value& ext_fields) {
+bool UnregisterClientRequestHeader::decode(const Protobuf::Value& ext_fields) {
   const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("clientID"));
-  ASSERT(members.contains("producerGroup") || members.contains("consumerGroup"));
-
-  client_id_ = members.at("clientID").string_value();
+  if (!readString(members, "clientID", client_id_) ||
+      (!members.contains("producerGroup") && !members.contains("consumerGroup"))) {
+    return false;
+  }
 
   if (members.contains("consumerGroup")) {
     consumer_group_ = members.at("consumerGroup").string_value();
@@ -666,6 +521,7 @@ void UnregisterClientRequestHeader::decode(const Protobuf::Value& ext_fields) {
   if (members.contains("producerGroup")) {
     producer_group_ = members.at("producerGroup").string_value();
   }
+  return true;
 }
 
 void GetConsumerListByGroupResponseBody::encode(Protobuf::Struct& root) {
@@ -716,11 +572,8 @@ void GetConsumerListByGroupRequestHeader::encode(Protobuf::Value& root) {
   members["consumerGroup"] = consumer_group_v;
 }
 
-void GetConsumerListByGroupRequestHeader::decode(const Protobuf::Value& ext_fields) {
-  const auto& members = ext_fields.struct_value().fields();
-  ASSERT(members.contains("consumerGroup"));
-
-  consumer_group_ = members.at("consumerGroup").string_value();
+bool GetConsumerListByGroupRequestHeader::decode(const Protobuf::Value& ext_fields) {
+  return readString(ext_fields.struct_value().fields(), "consumerGroup", consumer_group_);
 }
 
 void MetadataHelper::parseRequest(RemotingCommandPtr& request, MessageMetadataSharedPtr metadata) {

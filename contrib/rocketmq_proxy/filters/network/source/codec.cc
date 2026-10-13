@@ -111,10 +111,17 @@ RemotingCommandPtr Decoder::decode(Buffer::Instance& buffer, bool& underflow, bo
       if (filed_value_pair.contains("remark")) {
         cmd->remark(filed_value_pair.at("remark").string_value());
       }
-      cmd->custom_header_ = decodeResponseExtHeader(static_cast<ResponseCode>(code), header_struct,
-                                                    static_cast<RequestCode>(request_code));
-    } else {
-      cmd->custom_header_ = decodeExtHeader(static_cast<RequestCode>(code), header_struct);
+      if (!decodeResponseExtHeader(static_cast<ResponseCode>(code), header_struct,
+                                   static_cast<RequestCode>(request_code), cmd->custom_header_)) {
+        ENVOY_LOG(error, "Malformed frame: invalid 'extFields'. Header JSON: {}", header_json);
+        has_error = true;
+        return nullptr;
+      }
+    } else if (!decodeExtHeader(static_cast<RequestCode>(code), header_struct,
+                                cmd->custom_header_)) {
+      ENVOY_LOG(error, "Malformed frame: invalid 'extFields'. Header JSON: {}", header_json);
+      has_error = true;
+      return nullptr;
     }
     return cmd;
   } else {
@@ -247,106 +254,91 @@ std::string Decoder::decodeMsgId(Buffer::Instance& buffer, int32_t cursor) {
   return msg_id;
 }
 
-CommandCustomHeaderPtr Decoder::decodeExtHeader(RequestCode code, Protobuf::Struct& header_struct) {
-  const auto& filed_value_pair = header_struct.fields();
+bool Decoder::decodeExtHeader(RequestCode code, Protobuf::Struct& header_struct,
+                              CommandCustomHeaderPtr& custom_header) {
   switch (code) {
   case RequestCode::SendMessage: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto send_msg_ext_header = new SendMessageRequestHeader();
+    auto send_msg_ext_header = std::make_unique<SendMessageRequestHeader>();
     send_msg_ext_header->version_ = SendMessageRequestVersion::V1;
-    send_msg_ext_header->decode(ext_fields);
-    return send_msg_ext_header;
+    return decodeCustomHeader(std::move(send_msg_ext_header), header_struct, custom_header);
   }
   case RequestCode::SendMessageV2: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto send_msg_ext_header = new SendMessageRequestHeader();
+    auto send_msg_ext_header = std::make_unique<SendMessageRequestHeader>();
     send_msg_ext_header->version_ = SendMessageRequestVersion::V2;
-    send_msg_ext_header->decode(ext_fields);
-    return send_msg_ext_header;
+    return decodeCustomHeader(std::move(send_msg_ext_header), header_struct, custom_header);
   }
 
   case RequestCode::GetRouteInfoByTopic: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto get_route_info_request_header = new GetRouteInfoRequestHeader();
-    get_route_info_request_header->decode(ext_fields);
-    return get_route_info_request_header;
+    return decodeCustomHeader(std::make_unique<GetRouteInfoRequestHeader>(), header_struct,
+                              custom_header);
   }
 
   case RequestCode::UnregisterClient: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto unregister_client_request_header = new UnregisterClientRequestHeader();
-    unregister_client_request_header->decode(ext_fields);
-    return unregister_client_request_header;
+    return decodeCustomHeader(std::make_unique<UnregisterClientRequestHeader>(), header_struct,
+                              custom_header);
   }
 
   case RequestCode::GetConsumerListByGroup: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto get_consumer_list_by_group_request_header = new GetConsumerListByGroupRequestHeader();
-    get_consumer_list_by_group_request_header->decode(ext_fields);
-    return get_consumer_list_by_group_request_header;
+    return decodeCustomHeader(std::make_unique<GetConsumerListByGroupRequestHeader>(),
+                              header_struct, custom_header);
   }
 
   case RequestCode::PopMessage: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto pop_message_request_header = new PopMessageRequestHeader();
-    pop_message_request_header->decode(ext_fields);
-    return pop_message_request_header;
+    return decodeCustomHeader(std::make_unique<PopMessageRequestHeader>(), header_struct,
+                              custom_header);
   }
 
   case RequestCode::AckMessage: {
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    auto ack_message_request_header = new AckMessageRequestHeader();
-    ack_message_request_header->decode(ext_fields);
-    return ack_message_request_header;
+    return decodeCustomHeader(std::make_unique<AckMessageRequestHeader>(), header_struct,
+                              custom_header);
   }
 
   case RequestCode::HeartBeat: {
     // Heartbeat does not have an extended header.
-    return nullptr;
+    return true;
   }
 
   default:
     ENVOY_LOG(warn, "Unsupported request code: {}", static_cast<int>(code));
-    return nullptr;
+    return true;
   }
 }
 
-CommandCustomHeaderPtr Decoder::decodeResponseExtHeader(ResponseCode response_code,
-                                                        Protobuf::Struct& header_struct,
-                                                        RequestCode request_code) {
+bool Decoder::decodeResponseExtHeader(ResponseCode response_code, Protobuf::Struct& header_struct,
+                                      RequestCode request_code,
+                                      CommandCustomHeaderPtr& custom_header) {
   // No need to decode a failed response.
   if (response_code != ResponseCode::Success &&
       response_code != ResponseCode::ReplicaNotAvailable) {
-    return nullptr;
+    return true;
   }
-  const auto& filed_value_pair = header_struct.fields();
   switch (request_code) {
   case RequestCode::SendMessage:
   case RequestCode::SendMessageV2: {
-    auto send_message_response_header = new SendMessageResponseHeader();
-    ASSERT(filed_value_pair.contains("extFields"));
-    auto& ext_fields = filed_value_pair.at("extFields");
-    send_message_response_header->decode(ext_fields);
-    return send_message_response_header;
+    return decodeCustomHeader(std::make_unique<SendMessageResponseHeader>(), header_struct,
+                              custom_header);
   }
 
   case RequestCode::PopMessage: {
-    auto pop_message_response_header = new PopMessageResponseHeader();
-    ASSERT(filed_value_pair.contains("extFields"));
-    const auto& ext_fields = filed_value_pair.at("extFields");
-    pop_message_response_header->decode(ext_fields);
-    return pop_message_response_header;
+    return decodeCustomHeader(std::make_unique<PopMessageResponseHeader>(), header_struct,
+                              custom_header);
   }
   default:
-    return nullptr;
+    return true;
   }
+}
+
+bool Decoder::decodeCustomHeader(std::unique_ptr<CommandCustomHeader> header,
+                                 Protobuf::Struct& header_struct,
+                                 CommandCustomHeaderPtr& custom_header) {
+  const auto& filed_value_pair = header_struct.fields();
+  const auto ext_fields = filed_value_pair.find("extFields");
+  if (ext_fields == filed_value_pair.end() || !header->decode(ext_fields->second)) {
+    return false;
+  }
+  // RemotingCommand owns its custom header and deletes it on destruction.
+  custom_header = header.release();
+  return true;
 }
 
 void Encoder::encode(const RemotingCommandPtr& command, Buffer::Instance& data) {
