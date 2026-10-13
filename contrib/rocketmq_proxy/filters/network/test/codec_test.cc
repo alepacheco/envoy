@@ -915,6 +915,56 @@ TEST_F(RocketmqCodecTest, DecodeTopicFailure) {
   EXPECT_EQ(Decoder::decodeTopic(buffer, 0).empty(), true);
 }
 
+TEST_F(RocketmqCodecTest, DecodeTruncatedMessage) {
+  // The total size covers the whole buffer, but the buffer is too short for the message fields.
+  Buffer::OwnedImpl buffer;
+  buffer.writeBEInt<int32_t>(8);
+  buffer.writeBEInt<int32_t>(0);
+
+  EXPECT_TRUE(Decoder::decodeTopic(buffer, 0).empty());
+  EXPECT_TRUE(Decoder::decodeMsgId(buffer, 0).empty());
+  EXPECT_EQ(-1, Decoder::decodeQueueId(buffer, 0));
+  EXPECT_EQ(-1, Decoder::decodeQueueOffset(buffer, 0));
+  // The cursor is past the end of the buffer.
+  EXPECT_EQ(-1, Decoder::decodeQueueId(buffer, 64));
+
+  // Long enough for the physical offset, but not for the store host.
+  Buffer::OwnedImpl short_buffer;
+  short_buffer.writeBEInt<int32_t>(40);
+  short_buffer.add(std::string(36, '\0'));
+  EXPECT_TRUE(Decoder::decodeMsgId(short_buffer, 0).empty());
+}
+
+TEST_F(RocketmqCodecTest, DecodeTopicWithInvalidLengths) {
+  // Decodes the topic of a message with zeroed fixed fields followed by the given body size and
+  // the given tail, which holds the topic length and topic.
+  const auto decode_topic = [](MessageVersion version, int32_t body_size, const std::string& tail) {
+    Buffer::OwnedImpl buffer;
+    buffer.writeBEInt<int32_t>(4 + 4 + 76 + 4 + tail.size());
+    buffer.writeBEInt<int32_t>(enumToSignedInt(version));
+    // Body CRC through transaction offset.
+    buffer.add(std::string(76, '\0'));
+    buffer.writeBEInt<int32_t>(body_size);
+    buffer.add(tail);
+    return Decoder::decodeTopic(buffer, 0);
+  };
+
+  const std::string v1_topic = std::string({'\x09'}) + "TopicTest";
+  EXPECT_EQ("TopicTest", decode_topic(MessageVersion::V1, 0, v1_topic));
+
+  // The body size is negative.
+  EXPECT_EQ("", decode_topic(MessageVersion::V1, -100, v1_topic));
+  // The body size runs past the end of the buffer.
+  EXPECT_EQ("", decode_topic(MessageVersion::V1, std::numeric_limits<int32_t>::max(), v1_topic));
+  // The topic length is missing.
+  EXPECT_EQ("", decode_topic(MessageVersion::V1, 0, ""));
+  EXPECT_EQ("", decode_topic(MessageVersion::V2, 0, std::string({'\x00'})));
+  // The topic length is negative.
+  EXPECT_EQ("", decode_topic(MessageVersion::V1, 0, std::string({'\xff'}) + "TopicTest"));
+  // The topic length runs past the end of the buffer.
+  EXPECT_EQ("", decode_topic(MessageVersion::V2, 0, std::string({'\x00', '\x64'}) + "Topic"));
+}
+
 } // namespace RocketmqProxy
 } // namespace NetworkFilters
 } // namespace Extensions

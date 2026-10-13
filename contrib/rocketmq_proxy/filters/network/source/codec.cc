@@ -132,7 +132,7 @@ RemotingCommandPtr Decoder::decode(Buffer::Instance& buffer, bool& underflow, bo
 }
 
 bool Decoder::isComplete(Buffer::Instance& buffer, int32_t cursor) {
-  if (buffer.length() - cursor < 4) {
+  if (!hasBytes(buffer, cursor, sizeof(int32_t))) {
     // buffer is definitely incomplete.
     return false;
   }
@@ -142,7 +142,7 @@ bool Decoder::isComplete(Buffer::Instance& buffer, int32_t cursor) {
 }
 
 std::string Decoder::decodeTopic(Buffer::Instance& buffer, int32_t cursor) {
-  if (!isComplete(buffer, cursor)) {
+  if (!isComplete(buffer, cursor) || !hasBytes(buffer, cursor + 4, sizeof(int32_t))) {
     return EMPTY_STRING;
   }
 
@@ -172,27 +172,41 @@ std::string Decoder::decodeTopic(Buffer::Instance& buffer, int32_t cursor) {
                    + 4 /* re-consume times */
                    + 8 /* transaction offset */
       ;
+  if (!hasBytes(buffer, cursor + offset, sizeof(int32_t))) {
+    return EMPTY_STRING;
+  }
   auto body_size = buffer.peekBEInt<int32_t>(cursor + offset);
-  offset += 4 /* body size */
-            + body_size /* body */;
-  int32_t topic_length;
-  std::string topic;
+  if (body_size < 0) {
+    return EMPTY_STRING;
+  }
+  // The body size comes from the peer, so compute the topic position in 64 bits.
+  int64_t topic_offset = static_cast<int64_t>(cursor) + offset + 4 /* body size */
+                         + body_size /* body */;
+  int32_t topic_length = -1;
   switch (message_version) {
   case V1: {
-    topic_length = buffer.peekBEInt<int8_t>(cursor + offset);
-    topic.reserve(topic_length);
-    topic.resize(topic_length);
-    buffer.copyOut(cursor + offset + sizeof(int8_t), topic_length, &topic[0]);
+    if (!hasBytes(buffer, topic_offset, sizeof(int8_t))) {
+      return EMPTY_STRING;
+    }
+    topic_length = buffer.peekBEInt<int8_t>(topic_offset);
+    topic_offset += sizeof(int8_t);
     break;
   }
   case V2: {
-    topic_length = buffer.peekBEInt<int16_t>(cursor + offset);
-    topic.reserve(topic_length);
-    topic.resize(topic_length);
-    buffer.copyOut(cursor + offset + sizeof(int16_t), topic_length, &topic[0]);
+    if (!hasBytes(buffer, topic_offset, sizeof(int16_t))) {
+      return EMPTY_STRING;
+    }
+    topic_length = buffer.peekBEInt<int16_t>(topic_offset);
+    topic_offset += sizeof(int16_t);
     break;
   }
   }
+  if (topic_length < 0 || !hasBytes(buffer, topic_offset, topic_length)) {
+    return EMPTY_STRING;
+  }
+  std::string topic;
+  topic.resize(topic_length);
+  buffer.copyOut(topic_offset, topic_length, topic.data());
   return topic;
 }
 
@@ -204,6 +218,9 @@ int32_t Decoder::decodeQueueId(Buffer::Instance& buffer, int32_t cursor) {
   int32_t offset = 4   /* total size */
                    + 4 /* magic code */
                    + 4 /* body CRC */;
+  if (!hasBytes(buffer, cursor + offset, sizeof(int32_t))) {
+    return -1;
+  }
 
   return buffer.peekBEInt<int32_t>(cursor + offset);
 }
@@ -218,6 +235,9 @@ int64_t Decoder::decodeQueueOffset(Buffer::Instance& buffer, int32_t cursor) {
                    + 4 /* body CRC */
                    + 4 /* queue Id */
                    + 4 /* flag */;
+  if (!hasBytes(buffer, cursor + offset, sizeof(int64_t))) {
+    return -1;
+  }
   return buffer.peekBEInt<int64_t>(cursor + offset);
 }
 
@@ -232,6 +252,9 @@ std::string Decoder::decodeMsgId(Buffer::Instance& buffer, int32_t cursor) {
                    + 4 /* queue Id */
                    + 4 /* flag */
                    + 8 /* queue offset */;
+  if (!hasBytes(buffer, cursor + offset, sizeof(int64_t))) {
+    return EMPTY_STRING;
+  }
   auto physical_offset = buffer.peekBEInt<int64_t>(cursor + offset);
   offset += 8   /* physical offset */
             + 4 /* sys flag */
@@ -240,6 +263,9 @@ std::string Decoder::decodeMsgId(Buffer::Instance& buffer, int32_t cursor) {
             + 4 /* born host port */
             + 8 /* store timestamp */
       ;
+  if (!hasBytes(buffer, cursor + offset, sizeof(int64_t))) {
+    return EMPTY_STRING;
+  }
 
   Buffer::OwnedImpl msg_id_buffer;
   msg_id_buffer.writeBEInt<int64_t>(buffer.peekBEInt<int64_t>(cursor + offset));

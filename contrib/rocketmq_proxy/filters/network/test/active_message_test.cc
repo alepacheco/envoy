@@ -168,6 +168,61 @@ TEST_F(ActiveMessageTest, FillAckMessageDirectiveSuccess) {
   EXPECT_EQ(connection_manager_.getAckDirectiveTableForTest().size(), 1);
 }
 
+TEST_F(ActiveMessageTest, FillAckMessageDirectiveWithTruncatedMessage) {
+  RemotingCommandPtr cmd = std::make_unique<RemotingCommand>();
+  ActiveMessage active_message(connection_manager_, std::move(cmd));
+
+  // The frame length covers the whole body, but the body is too short for the message fields.
+  Buffer::OwnedImpl buffer;
+  buffer.writeBEInt<int32_t>(8);
+  buffer.writeBEInt<int32_t>(0);
+
+  AckMessageDirective directive("broker-a", 0, connection_manager_.timeSource().monotonicTime());
+  active_message.fillAckMessageDirective(buffer, "Group", "TopicTest", directive);
+
+  EXPECT_EQ(connection_manager_.getAckDirectiveTableForTest().size(), 0);
+}
+
+TEST_F(ActiveMessageTest, FillAckMessageDirectiveWithInvalidFrameLength) {
+  RemotingCommandPtr cmd = std::make_unique<RemotingCommand>();
+  ActiveMessage active_message(connection_manager_, std::move(cmd));
+  AckMessageDirective directive("broker-a", 0, connection_manager_.timeSource().monotonicTime());
+
+  // Zero, negative and past-the-end frame lengths. The body is long enough for the message fields,
+  // so a zero frame length would otherwise keep the cursor in place forever.
+  for (int32_t frame_length : {0, -16, 1000}) {
+    Buffer::OwnedImpl buffer;
+    buffer.writeBEInt<int32_t>(frame_length);
+    buffer.add(std::string(124, '\0'));
+    active_message.fillAckMessageDirective(buffer, "Group", "TopicTest", directive);
+  }
+
+  EXPECT_EQ(connection_manager_.getAckDirectiveTableForTest().size(), 0);
+}
+
+TEST_F(ActiveMessageTest, FillAckMessageDirectiveWithTrailingBytes) {
+  RemotingCommandPtr cmd = std::make_unique<RemotingCommand>();
+  ActiveMessage active_message(connection_manager_, std::move(cmd));
+
+  const std::string topic = "TopicTest";
+  Buffer::OwnedImpl buffer;
+  buffer.writeBEInt<int32_t>(4 + 4 + 76 + 4 + 1 + topic.length());
+  buffer.writeBEInt<int32_t>(enumToSignedInt(MessageVersion::V1));
+  // Body CRC through transaction offset.
+  buffer.add(std::string(76, '\0'));
+  // body size
+  buffer.writeBEInt<int32_t>(0);
+  buffer.writeBEInt<int8_t>(topic.length());
+  buffer.add(topic);
+  // Fewer bytes than a frame length field after the last message.
+  buffer.add(std::string(2, '\0'));
+
+  AckMessageDirective directive("broker-a", 0, connection_manager_.timeSource().monotonicTime());
+  active_message.fillAckMessageDirective(buffer, "Group", topic, directive);
+
+  EXPECT_EQ(connection_manager_.getAckDirectiveTableForTest().size(), 1);
+}
+
 TEST_F(ActiveMessageTest, RecordPopRouteInfo) {
   auto host_description = new NiceMock<Upstream::MockHostDescription>();
 

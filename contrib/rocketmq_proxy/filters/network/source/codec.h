@@ -82,6 +82,12 @@ private:
                                  CommandCustomHeaderPtr& custom_header);
 
   static bool isComplete(Buffer::Instance& buffer, int32_t cursor);
+
+  // Returns true if the buffer holds at least `size` bytes starting at `offset`.
+  static bool hasBytes(const Buffer::Instance& buffer, int64_t offset, uint64_t size) {
+    return offset >= 0 && static_cast<uint64_t>(offset) <= buffer.length() &&
+           size <= buffer.length() - offset;
+  }
 };
 
 class Encoder {

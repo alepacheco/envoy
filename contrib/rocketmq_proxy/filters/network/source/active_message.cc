@@ -62,8 +62,24 @@ void ActiveMessage::fillAckMessageDirective(Buffer::Instance& buffer, const std:
   int32_t cursor = 0;
   const int32_t buffer_length = buffer.length();
   while (cursor < buffer_length) {
+    if (buffer_length - cursor < static_cast<int32_t>(sizeof(int32_t))) {
+      ENVOY_LOG(warn, "Truncated message in pop-response body at offset {}", cursor);
+      break;
+    }
     auto frame_length = buffer.peekBEInt<int32_t>(cursor);
+    // A message must at least hold its own length field and fit in the remaining body; anything
+    // else would make the cursor stall, move backwards or run past the end of the buffer.
+    if (frame_length < static_cast<int32_t>(sizeof(int32_t)) ||
+        frame_length > buffer_length - cursor) {
+      ENVOY_LOG(warn, "Invalid message length {} in pop-response body at offset {}", frame_length,
+                cursor);
+      break;
+    }
     std::string decoded_topic = Decoder::decodeTopic(buffer, cursor);
+    if (decoded_topic.empty()) {
+      ENVOY_LOG(warn, "Failed to decode message in pop-response body at offset {}", cursor);
+      break;
+    }
     ENVOY_LOG(trace, "Process a message: consumer group: {}, topic: {}, messageId: {}",
               decoded_topic, group, Decoder::decodeMsgId(buffer, cursor));
     if (!absl::StartsWith(decoded_topic, RetryTopicPrefix) && decoded_topic != topic) {
